@@ -1,5 +1,5 @@
 # CUDA_VISIBLE_DEVICES=0 accelerate launch --num-processes 1 --config-file zero3.yaml rlvr.py
-# CUDA_VISIBLE_DEVICES=1 vf-vllm --model willcb/Qwen3-8B --data-parallel-size 1 --enforce-eager --disable-log-requests --max-seq-len 10240 --host 127.0.0.1
+# CUDA_VISIBLE_DEVICES=1 vf-vllm --model willcb/Qwen3-8B --data-parallel-size 1 --enforce-eager --disable-log-requests --max-seq-len 8192 --host 127.0.0.1
 
 import torch
 
