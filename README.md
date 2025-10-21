@@ -12,7 +12,7 @@ I trained [a model](https://huggingface.co/kyleavery/Qwen3-8B-EMBER2024-capa-rlv
 
 # Resources
 
-- [Verifiers Repo](https://github.com/PrimeIntellect-ai/verifiers)
+- [Verifiers repo](https://github.com/PrimeIntellect-ai/verifiers)
 - [Hugging Face course: Supervised Fine-Tuning](https://huggingface.co/learn/llm-course/chapter11/1)
 - [Hugging Face course: Build Reasoning Models](https://huggingface.co/learn/llm-course/chapter12/1)
 - [Unsloth Hyperparameters Guide](https://docs.unsloth.ai/get-started/fine-tuning-llms-guide/lora-hyperparameters-guide)
