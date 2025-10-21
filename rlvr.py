@@ -40,6 +40,7 @@ training_args = GRPOConfig(
     num_generations=8,
     num_iterations=1,
     num_train_epochs=1,
+    max_steps=10_000,
     learning_rate=1e-5,
     lr_scheduler_type="constant",
     do_eval=False,
