@@ -3,6 +3,7 @@ import re
 from typing import Any, Iterable, Tuple, TypedDict, Literal
 
 import verifiers as vf
+from verifiers.utils.data_utils import extract_boxed_answer
 from datasets import load_dataset, Dataset
 
 
@@ -52,41 +53,6 @@ def _build_question(disasm_lines: Iterable[str]) -> str:
     )
 
 
-def _extract_last_boxed_answer(text: str) -> str:
-    def extract_boxed_answer(text: str, find_last: bool = False) -> str:
-        def find_matching_brace(s: str, start: int) -> int:
-            count = 1
-            i = start
-            while i < len(s) and count > 0:
-                if s[i] == "{":
-                    count += 1
-                elif s[i] == "}":
-                    count -= 1
-                i += 1
-            return i - 1 if count == 0 else -1
-
-        # Find \boxed{
-        if find_last:
-            boxed_start = text.rfind("\\boxed{")
-        else:
-            boxed_start = text.find("\\boxed{")
-        if boxed_start == -1:
-            return text
-        # Find the content between the braces
-        content_start = boxed_start + 7  # len('\\boxed{')
-        closing_brace = find_matching_brace(text, content_start)
-
-        if closing_brace == -1:
-            return text
-
-        return text[content_start:closing_brace]
-
-    # https://github.com/willccbb/verifiers/pull/310
-    # return vf.extract_boxed_answer(text, find_last=True)
-
-    return extract_boxed_answer(text, find_last=True)
-
-
 class CapaRubric(vf.Rubric):
     def __init__(
         self,
@@ -95,7 +61,7 @@ class CapaRubric(vf.Rubric):
         weights: list[float] | None = None,
         parser: vf.Parser | None = None,
     ):
-        parser = parser or vf.ThinkParser(extract_fn=_extract_last_boxed_answer)
+        parser = parser or vf.ThinkParser(extract_fn=extract_boxed_answer)
         super().__init__(funcs=funcs, weights=weights, parser=parser)
         self.feature_mode = feature_mode
         self.add_reward_func(self.correct_features_reward_func)
@@ -207,6 +173,7 @@ def load_capa_dataset(
     max_disasm_inst: int = 250,
     min_capa_features: int = 1,
     max_capa_features: int = 4,
+    max_features: int = 100,
 ) -> Tuple[Dataset, list[str], dict[str, int]]:
     # streaming=True because EMBER2024-capa is huge
     raw = load_dataset("joyce8/EMBER2024-capa", split=split, streaming=True)
@@ -224,7 +191,32 @@ def load_capa_dataset(
     raw = raw.shuffle(seed=seed, buffer_size=10_000).take(n)
 
     # convert to a regular dataset after filtering
-    raw = Dataset.from_list(list(raw))
+    raw_list = list(raw)
+
+    if max_features > 0:
+        selected: list[CapaRow] = []
+        seen: set[str] = set()
+        for row in raw_list:
+            feats = {_normalize_feature(f) for f in (row.get("capa") or [])}
+            new_feats = feats - seen
+            if not new_feats:
+                selected.append(row)
+                continue
+
+            if len(seen) + len(new_feats) <= max_features:
+                selected.append(row)
+                seen.update(new_feats)
+                continue
+
+            if len(seen) >= max_features and feats.issubset(seen):
+                selected.append(row)
+                continue
+
+            continue
+
+        raw = Dataset.from_list(selected)
+    else:
+        raw = Dataset.from_list(raw_list)
 
     feature_vocab = _feature_vocab_from_raw(raw)
     feature_to_id = {feat: i for i, feat in enumerate(feature_vocab, start=1)}
@@ -265,9 +257,12 @@ def _build_system_prompt(
 def load_environment(
     use_think: bool = True,
     feature_mode: FeatureMode = "id",
+    split: str = "train",
+    n: int = 8000,
+    seed: int = 1337,
 ) -> vf.Environment:
     dataset, feature_vocab, feature_to_id = load_capa_dataset(
-        feature_mode=feature_mode, n=8000, seed=1337
+        feature_mode=feature_mode, n=n, seed=seed, split=split
     )
 
     updated_system_prompt = _build_system_prompt(
@@ -278,9 +273,9 @@ def load_environment(
     logging.debug(f"System prompt:\n{updated_system_prompt}\n")
 
     if use_think:
-        parser = vf.ThinkParser(extract_fn=_extract_last_boxed_answer)
+        parser = vf.ThinkParser(extract_fn=extract_boxed_answer)
     else:
-        parser = vf.Parser(extract_fn=_extract_last_boxed_answer)
+        parser = vf.Parser(extract_fn=extract_boxed_answer)
 
     rubric = CapaRubric(parser=parser, feature_mode=feature_mode)
 
